@@ -1,0 +1,114 @@
+#!/bin/bash
+#set -x
+
+SERVICE_NAME=new
+SERVICE_BASE=/opt/new
+BINDIR=${SERVICE_BASE}/bin
+MONITOR_DIR=${SERVICE_BASE}/etc
+
+proc_pid=0
+monitor_pid=0
+START_MONITOR_SHELL=Yes
+
+get_pid()
+{
+	proc_pid=`pidof ${BINDIR}/${SERVICE_NAME}`	
+}
+
+function __start() 
+{
+    get_pid
+
+    if [ ! -z "${proc_pid}" ] ;then
+        echo -n "[${SERVICE_NAME}] is Running "
+        echo '[Please Check]'
+        return
+    fi    
+    
+    ${BINDIR}/${SERVICE_NAME} 2>&1 >/dev/null &  
+    echo "[${SERVICE_NAME}] Running";
+    
+    sleep 3    
+    get_pid
+    if [ -z "${proc_pid}" ] ;then
+        echo "Start ${SERVICE_NAME} Failure"
+    fi
+}
+
+function __stop() 
+{ 
+    get_pid	   
+    echo -n "[${SERVICE_NAME}] "
+ 	if [ ! -z "${proc_pid}" ] ;then   
+        kill -9 ${proc_pid}
+        echo 'Stopped'
+    else
+        echo -n "Stopped ";
+        echo '[Please Check]'
+    fi
+}
+
+function __status() 
+{ 
+    get_pid 
+	 
+    echo -n "[${SERVICE_NAME}] "  
+    if [ ! -z "${proc_pid}" ] ;then
+        echo 'Running'
+    else
+        echo 'Stopped'
+    fi
+}
+
+start_monitor_script() 
+{
+	if [ ${START_MONITOR_SHELL} != "Yes" ];then
+		return
+	fi
+
+    count=`ps -aef | grep -w "${MONITOR_DIR}/monitor_${SERVICE_NAME}.sh" | grep -v grep | wc -l`
+    if [ $count == 0 ];then
+	    sh ${MONITOR_DIR}/monitor_${SERVICE_NAME}.sh &
+    fi
+}
+
+stop_monitor_script() 
+{
+	if [ ${START_MONITOR_SHELL} != "Yes" ];then
+		return
+	fi
+
+    monitor_pid=0
+    monitor_pid=`ps -aef | grep -w "${MONITOR_DIR}/monitor_${SERVICE_NAME}.sh" | grep -v grep |grep -v 'grep' |awk '{print $2}'`;    
+    
+    if [ -z "$monitor_pid" ] ; then
+        monitor_pid=0
+    fi
+
+    if [ "$monitor_pid" != "0" ]; then
+        kill -9 ${monitor_pid} 2>&1 >/dev/null;
+    fi
+}
+
+
+case "$1" in
+    start)  
+        __start;
+        start_monitor_script
+        ;; 
+    stop)   
+		stop_monitor_script
+        __stop	
+        ;;
+    restart)
+        stop_monitor_script
+        __stop
+        __start
+        start_monitor_script
+        ;;
+    status) 
+        __status;;
+    *)  
+		echo 'Usage: ' $0 'start|stop|restart|status';;
+esac
+
